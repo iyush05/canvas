@@ -1,0 +1,43 @@
+// Canvas Whiteboard — Database Schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Room {
+  id            String    @id @default(cuid())
+  name          String?
+  viewportState Json?     @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  elements      Element[]
+
+  @@index([updatedAt])
+}
+
+model Element {
+  id        String    @id
+  room      Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId    String
+  type      String    // "pen" | "rectangle" | "ellipse" | "line" | "arrow" | "image"
+  data      Json      // tool-specific payload
+  style     Json      // visual styling (strokeColor, strokeWidth, fillColor, opacity)
+  posX      Float     @default(0)
+  posY      Float     @default(0)
+  width     Float     @default(0)
+  height    Float     @default(0)
+  rotation  Float     @default(0)
+  zIndex    Int       @default(0)
+  version   Int       @default(1)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete
+
+  @@index([roomId])
+  @@index([roomId, updatedAt])
+}
