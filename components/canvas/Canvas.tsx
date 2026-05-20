@@ -224,7 +224,8 @@ export default function Canvas() {
           if (el) {
             const handle = getHandleHit(el, worldPos);
             if (handle) {
-              state.pushUndo();
+              // Save pre-resize state for operation-based undo
+              state.pushUndo({ kind: "update", elementId: id, prev: { ...el } });
               resizeRef.current = {
                 id,
                 handle,
@@ -275,8 +276,7 @@ export default function Canvas() {
         return;
       }
 
-      // Start drawing
-      store.getState().pushUndo();
+      // Start drawing (undo op is pushed at commit in handlePointerUp)
 
       const maxZ = Array.from(elements.values()).reduce(
         (max, el) => Math.max(max, el.zIndex),
@@ -308,11 +308,9 @@ export default function Canvas() {
       } else if (activeTool === "text") {
         // Create a new text element and immediately open the editor
         const el = createElement("text", activeStyle, worldPos.x, worldPos.y, maxZ + 1);
-        console.log("[TEXT TOOL] Created text element:", el.id, "at", worldPos.x, worldPos.y);
         store.getState().addElement(el);
+        store.getState().pushUndo({ kind: "add", elementId: el.id });
         store.getState().setEditingTextId(el.id);
-        console.log("[TEXT TOOL] editingTextId set to:", store.getState().editingTextId);
-        console.log("[TEXT TOOL] element exists in store:", store.getState().elements.has(el.id));
         store.getState().setActiveTool("select");
         return; // Don't capture pointer — let the textarea take focus
       }
@@ -490,23 +488,29 @@ export default function Canvas() {
         finalized = finalizeLineElement(drawing);
       }
 
-      // Only add if it has some size
+      // Only commit if the element has some meaningful size
+      let shouldCommit = false;
       if (
         finalized.type === "pen" &&
         (finalized.data as PenData).points.length >= 1
       ) {
-        store.getState().addElement(finalized);
+        shouldCommit = true;
       } else if (
         (finalized.type === "line" || finalized.type === "arrow") &&
         (finalized.data as LineData).points.length >= 2
       ) {
-        store.getState().addElement(finalized);
+        shouldCommit = true;
       } else if (
         (finalized.type === "rectangle" || finalized.type === "ellipse") &&
         finalized.width > 2 &&
         finalized.height > 2
       ) {
+        shouldCommit = true;
+      }
+
+      if (shouldCommit) {
         store.getState().addElement(finalized);
+        store.getState().pushUndo({ kind: "add", elementId: finalized.id });
       }
 
       drawingRef.current = null;
@@ -580,7 +584,17 @@ export default function Canvas() {
       if (e.key === "Delete" || e.key === "Backspace") {
         const state = store.getState();
         if (state.selectedElementIds.size > 0) {
-          state.pushUndo();
+          // Collect elements being deleted for undo
+          const deleteOps: { kind: "delete"; element: CanvasElement }[] = [];
+          for (const id of state.selectedElementIds) {
+            const el = state.elements.get(id);
+            if (el) deleteOps.push({ kind: "delete", element: { ...el } });
+          }
+          if (deleteOps.length === 1) {
+            state.pushUndo(deleteOps[0]);
+          } else if (deleteOps.length > 1) {
+            state.pushUndo({ kind: "batch", ops: deleteOps });
+          }
           for (const id of state.selectedElementIds) {
             state.deleteElement(id);
           }
