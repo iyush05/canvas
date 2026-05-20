@@ -4,7 +4,17 @@ import { useEffect, useRef, useCallback } from "react";
 import { useCanvasStore } from "@/stores/canvasStore";
 import type { ServerMessage, ClientMessage, CanvasElement } from "@/types/canvas";
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3001";
+const getWsUrl = () => {
+  let url = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3001";
+  if (typeof window !== "undefined") {
+    // If accessing via local IP but URL is localhost, replace it to allow local network testing
+    if (url.includes("localhost") && window.location.hostname !== "localhost") {
+      url = url.replace("localhost", window.location.hostname);
+    }
+  }
+  return url;
+};
+
 const RECONNECT_DELAY = 2000;
 const CURSOR_THROTTLE_MS = 50;
 
@@ -82,7 +92,8 @@ export function useWebSocket(roomId: string) {
       if (!isActive) return;
 
       const { clientId, userName, userColor } = store.getState();
-      const url = `${WS_URL}?roomId=${roomId}&clientId=${clientId}&userName=${encodeURIComponent(userName)}&color=${encodeURIComponent(userColor)}`;
+      const baseUrl = getWsUrl();
+      const url = `${baseUrl}?roomId=${roomId}&clientId=${clientId}&userName=${encodeURIComponent(userName)}&color=${encodeURIComponent(userColor)}`;
 
       ws = new WebSocket(url);
       wsRef.current = ws;
@@ -101,18 +112,18 @@ export function useWebSocket(roomId: string) {
       };
 
       ws.onclose = () => {
+        if (!isActive) return;
         console.log("[WS] Disconnected");
         if (wsRef.current === ws) {
           wsRef.current = null;
         }
-        if (isActive) {
-          timer = setTimeout(initWs, RECONNECT_DELAY);
-        }
+        timer = setTimeout(initWs, RECONNECT_DELAY);
       };
 
       ws.onerror = (err) => {
-        console.error("[WS] Error:", err);
-        ws.close();
+        if (!isActive) return;
+        console.error(`[WS] Error connecting to ${url}:`, err);
+        ws?.close();
       };
     };
 

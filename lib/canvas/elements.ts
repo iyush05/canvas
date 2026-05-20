@@ -34,6 +34,11 @@ export function createElement(
       originalHeight: 0,
       aspectRatio: 1,
     },
+    text: {
+      text: "",
+      fontSize: 24,
+      fontFamily: "Inter, sans-serif",
+    },
   };
 
   return {

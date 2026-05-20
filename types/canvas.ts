@@ -7,7 +7,8 @@ export type Tool =
   | "ellipse"
   | "line"
   | "arrow"
-  | "image";
+  | "image"
+  | "text";
 
 export type ElementType = Exclude<Tool, "select">;
 
@@ -44,7 +45,7 @@ export interface RectangleData {
   borderRadius: number;
 }
 
-export interface EllipseData {}
+export interface EllipseData { }
 
 export interface LineData {
   points: Point[];
@@ -62,13 +63,20 @@ export interface ImageData {
   aspectRatio: number;
 }
 
+export interface TextData {
+  text: string;
+  fontSize: number;
+  fontFamily: string;
+}
+
 export type ElementData =
   | PenData
   | RectangleData
   | EllipseData
   | LineData
   | ArrowData
-  | ImageData;
+  | ImageData
+  | TextData;
 
 // ─── Canvas Element ─────────────────────────────────────────
 
@@ -117,40 +125,40 @@ export interface CursorPosition {
 export type ClientMessage =
   | { type: "element:create"; element: CanvasElement }
   | {
-      type: "element:update";
-      elementId: string;
-      changes: Partial<CanvasElement>;
-    }
+    type: "element:update";
+    elementId: string;
+    changes: Partial<CanvasElement>;
+  }
   | { type: "element:delete"; elementId: string }
   | {
-      type: "cursor:move";
-      position: { x: number; y: number };
-      userName?: string;
-    }
+    type: "cursor:move";
+    position: { x: number; y: number };
+    userName?: string;
+  }
   | { type: "batch:update"; operations: ClientMessage[] };
 
 // Server → Client
 export type ServerMessage =
   | {
-      type: "room:state";
-      elements: CanvasElement[];
-      users: CursorPosition[];
-    }
+    type: "room:state";
+    elements: CanvasElement[];
+    users: CursorPosition[];
+  }
   | { type: "element:create"; element: CanvasElement; clientId: string }
   | {
-      type: "element:update";
-      elementId: string;
-      changes: Partial<CanvasElement>;
-      clientId: string;
-    }
+    type: "element:update";
+    elementId: string;
+    changes: Partial<CanvasElement>;
+    clientId: string;
+  }
   | { type: "element:delete"; elementId: string; clientId: string }
   | {
-      type: "cursor:moved";
-      clientId: string;
-      position: { x: number; y: number };
-      userName?: string;
-      color?: string;
-    }
+    type: "cursor:moved";
+    clientId: string;
+    position: { x: number; y: number };
+    userName?: string;
+    color?: string;
+  }
   | { type: "user:joined"; clientId: string; userName: string; color: string }
   | { type: "user:left"; clientId: string }
   | { type: "error"; message: string };

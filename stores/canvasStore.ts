@@ -24,6 +24,7 @@ interface CanvasState {
   // Scene state
   elements: Map<string, CanvasElement>;
   selectedElementIds: Set<string>;
+  editingTextId: string | null;
 
   // Viewport state (infinite canvas)
   viewport: Viewport;
@@ -50,6 +51,7 @@ interface CanvasState {
   // Actions — Selection
   selectElements: (ids: string[]) => void;
   clearSelection: () => void;
+  setEditingTextId: (id: string | null) => void;
 
   // Actions — Viewport
   setViewport: (viewport: Partial<Viewport>) => void;
@@ -75,10 +77,10 @@ const userColor = getColorForClient(clientId);
 
 const userName = typeof window !== "undefined"
   ? (sessionStorage.getItem("canvas-user-name") ?? (() => {
-      const name = generateUserName();
-      sessionStorage.setItem("canvas-user-name", name);
-      return name;
-    })())
+    const name = generateUserName();
+    sessionStorage.setItem("canvas-user-name", name);
+    return name;
+  })())
   : generateUserName();
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
@@ -94,6 +96,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   // Scene state
   elements: new Map(),
   selectedElementIds: new Set(),
+  editingTextId: null,
 
   // Viewport
   viewport: { ...DEFAULT_VIEWPORT },
@@ -162,7 +165,11 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   clearSelection: () => {
-    set({ selectedElementIds: new Set() });
+    set({ selectedElementIds: new Set(), editingTextId: null });
+  },
+
+  setEditingTextId: (id) => {
+    set({ editingTextId: id, selectedElementIds: new Set() });
   },
 
   // ─── Viewport Actions ──────────────────────────────────

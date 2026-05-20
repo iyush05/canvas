@@ -11,7 +11,7 @@ import {
   finalizeShapeElement,
   hitTestElement,
 } from "@/lib/canvas/elements";
-import type { CanvasElement, PenData, LineData, ArrowData, Point } from "@/types/canvas";
+import type { CanvasElement, PenData, LineData, ArrowData, TextData, Point } from "@/types/canvas";
 import { clamp } from "@/lib/utils";
 
 export default function Canvas() {
@@ -121,6 +121,8 @@ export default function Canvas() {
     );
 
     for (const element of sortedElements) {
+      // Skip the text element being actively edited (the textarea overlay handles it)
+      if (element.id === state.editingTextId) continue;
       const elBounds = {
         x: element.posX - 10,
         y: element.posY - 10,
@@ -303,6 +305,16 @@ export default function Canvas() {
         dragStartRef.current = worldPos;
         drawingRef.current = el;
         store.getState().addElement(el);
+      } else if (activeTool === "text") {
+        // Create a new text element and immediately open the editor
+        const el = createElement("text", activeStyle, worldPos.x, worldPos.y, maxZ + 1);
+        console.log("[TEXT TOOL] Created text element:", el.id, "at", worldPos.x, worldPos.y);
+        store.getState().addElement(el);
+        store.getState().setEditingTextId(el.id);
+        console.log("[TEXT TOOL] editingTextId set to:", store.getState().editingTextId);
+        console.log("[TEXT TOOL] element exists in store:", store.getState().elements.has(el.id));
+        store.getState().setActiveTool("select");
+        return; // Don't capture pointer — let the textarea take focus
       }
 
       canvas.setPointerCapture(e.pointerId);
@@ -333,12 +345,12 @@ export default function Canvas() {
         const { id, handle, startWidth, startHeight, startX, startY, startPos } = resizeRef.current;
         const dx = worldPos.x - startPos.x;
         const dy = worldPos.y - startPos.y;
-        
+
         let newX = startX;
         let newY = startY;
         let newW = startWidth;
         let newH = startHeight;
-        
+
         const el = state.elements.get(id);
         const isPreservingAspectRatio = e.shiftKey || (el && el.type === "image");
         let aspect = 1;
@@ -375,7 +387,7 @@ export default function Canvas() {
           newX = startX + startWidth - newW;
           newY = startY + startHeight - newH;
         }
-        
+
         state.updateElement(id, {
           posX: newX,
           posY: newY,
@@ -550,6 +562,9 @@ export default function Canvas() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept keyboard events while editing text
+      if (store.getState().editingTextId) return;
+
       if (e.code === "Space" && !e.repeat) {
         spaceDownRef.current = true;
         if (canvasRef.current) canvasRef.current.style.cursor = "grab";
@@ -581,6 +596,10 @@ export default function Canvas() {
           case "p":
           case "P":
             store.getState().setActiveTool("pen");
+            break;
+          case "t":
+          case "T":
+            store.getState().setActiveTool("text");
             break;
           case "r":
           case "R":
@@ -645,6 +664,36 @@ export default function Canvas() {
     e.preventDefault();
   }, []);
 
+  // Double-click to re-edit existing text
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const state = store.getState();
+      if (state.activeTool !== "select") return;
+
+      const rect = canvas.getBoundingClientRect();
+      const worldPos = screenToWorld(
+        e.clientX - rect.left,
+        e.clientY - rect.top,
+        state.viewport.offsetX,
+        state.viewport.offsetY,
+        state.viewport.zoom
+      );
+      const sorted = Array.from(state.elements.values()).sort(
+        (a, b) => b.zIndex - a.zIndex
+      );
+
+      for (const el of sorted) {
+        if (el.type === "text" && hitTestElement(el, worldPos.x, worldPos.y)) {
+          state.setEditingTextId(el.id);
+          break;
+        }
+      }
+    },
+    [store]
+  );
+
   return (
     <div ref={containerRef} className="absolute inset-0">
       <canvas
@@ -655,6 +704,7 @@ export default function Canvas() {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onContextMenu={handleContextMenu}
+        onDoubleClick={handleDoubleClick}
       />
     </div>
   );

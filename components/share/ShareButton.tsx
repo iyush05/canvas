@@ -11,9 +11,13 @@ export default function ShareButton() {
   const [copied, setCopied] = useState(false);
   const router = useRouter();
 
+  const isSharedMode = useCanvasStore((s) => s.isSharedMode);
+
   const handleShare = async () => {
-    if (shareUrl) {
-      await navigator.clipboard.writeText(shareUrl);
+    // If already in a room or already generated a URL, just copy it
+    if (isSharedMode || shareUrl) {
+      const urlToCopy = shareUrl || window.location.href;
+      await navigator.clipboard.writeText(urlToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       return;
@@ -88,8 +92,8 @@ export default function ShareButton() {
         </>
       ) : (
         <>
-          <Link2 size={16} className={shareUrl ? "text-indigo-400" : "text-white/60"} />
-          {shareUrl ? "Copy Link" : "Share"}
+          <Link2 size={16} className={(shareUrl || isSharedMode) ? "text-indigo-400" : "text-white/60"} />
+          {(shareUrl || isSharedMode) ? "Copy Link" : "Share"}
         </>
       )}
     </button>

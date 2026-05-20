@@ -1,4 +1,4 @@
-import type { CanvasElement, PenData, ArrowData, Point } from "@/types/canvas";
+import type { CanvasElement, PenData, ArrowData, TextData, Point } from "@/types/canvas";
 
 // ─── Render Dispatch ──────────────────────────────────────
 
@@ -42,6 +42,9 @@ export function renderElement(
       break;
     case "image":
       renderImage(ctx, element);
+      break;
+    case "text":
+      renderText(ctx, element);
       break;
   }
 
@@ -239,6 +242,27 @@ function renderImage(
 
   if (img.complete && img.naturalWidth > 0) {
     ctx.drawImage(img, 0, 0, element.width, element.height);
+  }
+}
+
+// ─── Text ─────────────────────────────────────────────────
+
+function renderText(
+  ctx: CanvasRenderingContext2D,
+  element: CanvasElement
+): void {
+  const data = element.data as TextData;
+  if (!data.text) return;
+
+  ctx.font = `${data.fontSize}px ${data.fontFamily}`;
+  ctx.fillStyle = element.style.strokeColor;
+  ctx.textBaseline = "top";
+
+  const lines = data.text.split("\n");
+  const lineHeight = data.fontSize * 1.2;
+
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], 0, i * lineHeight);
   }
 }
 

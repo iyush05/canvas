@@ -1,11 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Toolbar from "@/components/toolbar/Toolbar";
 import ZoomControls from "@/components/ui/ZoomControls";
 import ShareButton from "@/components/share/ShareButton";
+import ActiveUsers from "@/components/room/ActiveUsers";
+import TextEditor from "@/components/canvas/TextEditor";
 
 const Canvas = dynamic(() => import("@/components/canvas/Canvas"), {
+  ssr: false,
+});
+const Toolbar = dynamic(() => import("@/components/toolbar/Toolbar"), {
   ssr: false,
 });
 
@@ -36,10 +40,13 @@ export default function WhiteboardApp({ mode, roomId }: WhiteboardAppProps) {
       </div>
       
       {/* Liquid Glass UI Layer */}
-      <div className="relative z-50">
-        <Toolbar />
-        <ZoomControls />
-        <ShareButton />
+      <div className="absolute inset-0 z-50 pointer-events-none">
+        <div className="pointer-events-auto">
+          <Toolbar />
+          <ZoomControls />
+          <ActiveUsers />
+          <ShareButton />
+        </div>
 
         {/* Keyboard hints */}
         <div
@@ -63,6 +70,9 @@ export default function WhiteboardApp({ mode, roomId }: WhiteboardAppProps) {
           </div>
         )}
       </div>
+
+      {/* Text Editor Overlay — must be above everything */}
+      <TextEditor />
     </div>
   );
 }
