@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useCanvasStore } from "@/stores/canvasStore";
 import { createImageElement } from "@/lib/canvas/elements";
 import type { ElementStyle } from "@/types/canvas";
@@ -20,42 +21,65 @@ export default function ImageUploadModal() {
       return;
     }
 
-    setIsUploading(true);
-    try {
+    // 1. Create a local blob URL for instant preview
+    const blobUrl = URL.createObjectURL(file);
+
+    // 2. Load the image to get dimensions, then place immediately
+    const img = new window.Image();
+    img.onload = () => {
+      const state = store.getState();
+      const el = createImageElement(
+        blobUrl,
+        img.naturalWidth,
+        img.naturalHeight,
+        state.viewport.offsetX * -1 / state.viewport.zoom + 100,
+        state.viewport.offsetY * -1 / state.viewport.zoom + 100,
+        state.getElementsArray().length + 1,
+        { ...state.activeStyle } as ElementStyle
+      );
+
+      // Place on canvas instantly
+      state.addElement(el);
+      state.selectElements([el.id]);
+      state.setActiveTool("select");
+      setIsOpen(false);
+      setIsUploading(false);
+
+      // 3. Upload to S3 in the background
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
+      fetch("/api/upload", { method: "POST", body: formData })
+        .then(async (res) => {
+          if (!res.ok) throw new Error("Upload failed");
+          const { src } = await res.json();
 
-      if (!res.ok) throw new Error("Upload failed");
-      const { src } = await res.json();
-
-      // Get natural dimensions
-      const img = new Image();
-      img.onload = () => {
-        const state = store.getState();
-        const el = createImageElement(
-          src,
-          img.naturalWidth,
-          img.naturalHeight,
-          state.viewport.offsetX * -1 / state.viewport.zoom + 100, // center somewhat
-          state.viewport.offsetY * -1 / state.viewport.zoom + 100,
-          state.getElementsArray().length + 1,
-          { ...state.activeStyle } as ElementStyle
-        );
-        state.addElement(el);
-        setIsOpen(false);
-      };
-      img.src = src;
-    } catch (err) {
-      console.error("Image upload failed:", err);
-      alert("Failed to upload image");
-    } finally {
-      setIsUploading(false);
-    }
+          // Preload the S3 image before swapping
+          const s3Img = new window.Image();
+          s3Img.onload = () => {
+            // S3 image loaded successfully — now swap the URL
+            const currentEl = store.getState().elements.get(el.id);
+            if (currentEl) {
+              store.getState().updateElement(el.id, {
+                data: { ...currentEl.data, src },
+              });
+            }
+            // Clean up the blob URL after swap
+            URL.revokeObjectURL(blobUrl);
+          };
+          s3Img.onerror = () => {
+            // S3 image failed to load — keep the blob URL
+            console.warn("S3 image failed to load, keeping local blob URL");
+          };
+          s3Img.src = src;
+        })
+        .catch((err) => {
+          console.error("Background S3 upload failed:", err);
+          // Image still shows via blob URL for this session
+        });
+    };
+    img.src = blobUrl;
+    setIsUploading(true);
   };
 
   const onDrag = (e: React.DragEvent) => {
@@ -87,8 +111,8 @@ export default function ImageUploadModal() {
         <ImageIcon size={20} />
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md p-4">
+      {isOpen && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-md p-4">
           <div 
             className="w-full max-w-md rounded-3xl relative overflow-hidden"
             style={{
@@ -128,6 +152,7 @@ export default function ImageUploadModal() {
                   className="hidden"
                   onChange={(e) => {
                     if (e.target.files?.[0]) handleUpload(e.target.files[0]);
+                    e.target.value = "";
                   }}
                 />
                 
@@ -158,7 +183,8 @@ export default function ImageUploadModal() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
