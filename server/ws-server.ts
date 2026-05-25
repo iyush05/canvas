@@ -1,3 +1,4 @@
+import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "http";
 
@@ -27,7 +28,19 @@ const pendingOps = new Map<string, PendingOp[]>();
 
 // ─── Server ─────────────────────────────────────────────────
 
-const wss = new WebSocketServer({ port: PORT });
+const server = http.createServer((req, res) => {
+  // Health check endpoint
+  if (req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("OK");
+    return;
+  }
+
+  res.writeHead(404);
+  res.end();
+});
+
+const wss = new WebSocketServer({ server });
 
 console.log(`[WS] WebSocket server running on ws://localhost:${PORT}`);
 
@@ -242,4 +255,8 @@ process.on("SIGINT", async () => {
   }
   wss.close();
   process.exit(0);
+});
+
+server.listen(PORT, () => {
+  console.log(`RUNNING ON ${PORT}`);
 });
